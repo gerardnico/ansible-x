@@ -257,9 +257,10 @@ fi
 # SSH - ANSIBLE_PRIVATE_KEY_FILE
 # https://docs.ansible.com/ansible/devel/reference_appendices/config.html#envvar-ANSIBLE_PRIVATE_KEY_FILE
 if [ "${ANSIBLE_PRIVATE_KEY_FILE:-}" != '' ]; then
+  echo::debug "Private Key file env ANSIBLE_PRIVATE_KEY_FILE found. Mounting the volume for it"
   ENVS+=("-v" "$ANSIBLE_PRIVATE_KEY_FILE:$ANSIBLE_PRIVATE_KEY_FILE")
 else
-  if [ "${ANS_X_SSH_KEY_PASS:-}" != "" ] && [ "$ANS_X_PASS_ENABLED" == "1" ]; then
+  if [ "${ANS_X_SSH_KEY_PASS:-}" != "" ]; then
     PRIVATE_KEY_PASS_FILE="${PASSWORD_STORE_DIR:-"$HOME~/.password-store"}/$ANS_X_SSH_KEY_PASS.gpg"
     if [ ! -f "$PRIVATE_KEY_PASS_FILE" ]; then
       echo::err "The pass ${ANS_X_SSH_KEY_PASS} of the env ANS_X_SSH_KEY_PASS does not exist ($PRIVATE_KEY_PASS_FILE)"
@@ -267,11 +268,16 @@ else
     fi
     PASS_DOCKER_PATH=/tmp/ssh-key
     PASS_LOCAL_PATH=/dev/shm/ssh-key
-    pass "$ANS_X_SSH_KEY_PASS" >| $PASS_LOCAL_PATH
+    pass "$ANS_X_SSH_KEY_PASS" >| "$PASS_LOCAL_PATH"
+    # to avoid Permissions 0644 for '/tmp/ssh-key' are too open
+    # as we mount with the current user, docker inherit the permissions
+    chmod 600 "$PASS_LOCAL_PATH"
     # env for --private-key
     ENVS+=("--env" "ANSIBLE_PRIVATE_KEY_FILE=$PASS_DOCKER_PATH")
     ENVS+=("-v" "$PASS_LOCAL_PATH:$PASS_DOCKER_PATH")
+    echo::debug "ANS_X_SSH_KEY_PASS mounted and ANSIBLE_PRIVATE_KEY_FILE defined"
   else
+      echo::debug "No ANS_X_SSH_KEY_PASS defined"
       # Loop through the ANS_X_SSH_KEY_PASSPHRASE environment variables
       # and add the key to the agent
       #
